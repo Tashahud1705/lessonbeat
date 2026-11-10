@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lessonbeat</title>
+<meta name="description" content="Music lesson plans for Australian classrooms, with clap-alongs, sing-alongs and backing tracks made for each lesson.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231B2233'/%3E%3Cellipse cx='12' cy='22' rx='5' ry='3.7' transform='rotate(-22 12 22)' fill='%23F5EFE3'/%3E%3Crect x='15.6' y='6' width='2.2' height='16' fill='%23F5EFE3'/%3E%3Cpath d='M17.8 6c4 1 6 3.5 5 8' fill='none' stroke='%23C4412B' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,500..800;1,9..144,500..700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<a class="skip" href="#view">Skip to content</a>
+<header class="mast">
+  <div class="wrap mast-in">
+    <a class="brand" href="#/" aria-label="Lessonbeat home"><span class="brand-name">Lessonbeat</span><span class="brand-tag">Music planning for Australian classrooms</span></a>
+    <nav class="nav" aria-label="Main">
+      <a href="#/plan" data-nav="plan">Plan</a>
+      <a href="#/units" data-nav="units">My units</a>
+      <button class="link" id="account-btn" type="button">Sign in</button>
+    </nav>
+  </div>
+  <div class="staff" aria-hidden="true"></div>
+</header>
+<main id="view" class="wrap" tabindex="-1"></main>
+<footer class="foot wrap">
+  <p>Curriculum codes are from the Australian Curriculum v9.0 Music, © ACARA, used under CC BY 4.0. Lessonbeat is not endorsed by ACARA or any state authority. Always check plans against your school's requirements.</p>
+  <p><button class="link" id="feedback-btn" type="button">Tell us what you think</button> · Pilot version</p>
+</footer>
+<div id="modal" hidden></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<div id="print"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
