@@ -191,3 +191,26 @@ drop policy if exists "events owner insert" on public.events;
 create policy "events owner insert" on public.events for insert with check (user_id = (select auth.uid()));
 grant select, insert, update, delete on public.classes, public.lesson_logs to authenticated;
 grant insert on public.events to authenticated;
+
+-- ===== Security hardening (November 2026) =====
+-- Shared units are fetched one at a time by exact id through this function; they can no longer be listed.
+drop policy if exists "units shared read" on public.units;
+create or replace function public.get_shared_unit(p_id uuid)
+returns table(id uuid, title text, form jsonb, content jsonb, is_shared boolean, updated_at timestamptz)
+language sql stable security definer set search_path = '' as $$
+  select u.id, u.title, u.form - 'memory' - 'classId' - 'className' - 'docIds' - 'docs' - 'notes' - 'avoid', u.content - 'report' - 'notes', u.is_shared, u.updated_at
+  from public.units u where u.id = p_id and u.is_shared = true $$;
+revoke all on function public.get_shared_unit(uuid) from public, anon;
+grant execute on function public.get_shared_unit(uuid) to authenticated;
+-- Least privilege.
+revoke all on all tables in schema public from anon;
+revoke all on all tables in schema public from authenticated;
+grant select on public.curriculum_codes to anon, authenticated;
+grant select, insert, update, delete on public.units, public.documents, public.classes, public.lesson_logs to authenticated;
+grant select on public.generations to authenticated;
+grant select, insert on public.feedback to authenticated;
+grant insert on public.events to authenticated;
+-- Owner-only policies for the signed-in role (see the migration "security_hardening" for the full list),
+-- size limits on every table, per-user row caps (public.enforce_cap), a 10 MB documents-only upload bucket,
+-- and an audit trail on public.generations (error, hashed ip, ms).
+alter table public.generations add column if not exists error text not null default '', add column if not exists ip text not null default '', add column if not exists ms int not null default 0;
