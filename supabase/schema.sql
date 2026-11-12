@@ -169,3 +169,25 @@ insert into public.curriculum_codes (code, framework, band, strand, description,
 ('VC2AMU10C02','VC2','Years 9-10','Creating and making','compose music using elements and compositional devices suited to chosen styles, and notate, document or record it',false,131),
 ('VC2AMU10P01','VC2','Years 9-10','Presenting and performing','rehearse and present planned performances of learnt or composed music using relevant techniques and performance styles',false,132)
 on conflict (code) do update set framework = excluded.framework, band = excluded.band, strand = excluded.strand, description = excluded.description, verbatim = excluded.verbatim, sort = excluded.sort;
+
+-- Classes, what was taught to them, and anonymous usage signals.
+create table if not exists public.classes (id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade, name text not null check (char_length(name) between 1 and 60), year text not null, created_at timestamptz not null default now());
+create table if not exists public.lesson_logs (id bigint generated always as identity primary key, user_id uuid not null default auth.uid() references auth.users(id) on delete cascade, class_id uuid not null references public.classes(id) on delete cascade, unit_id uuid references public.units(id) on delete set null, unit_title text not null default '', lesson_index int not null default 0, lesson_title text not null default '', rating text not null check (rating in ('easy','right','hard')), sc jsonb not null default '[]'::jsonb, media jsonb not null default '[]'::jsonb, note text not null default '' check (char_length(note) <= 600), minutes int not null default 0, taught_at timestamptz not null default now());
+create table if not exists public.events (id bigint generated always as identity primary key, user_id uuid not null default auth.uid() references auth.users(id) on delete cascade, kind text not null check (char_length(kind) <= 40), year text not null default '', state text not null default '', data jsonb not null default '{}'::jsonb, created_at timestamptz not null default now());
+create index if not exists classes_user_idx on public.classes(user_id);
+create index if not exists lesson_logs_user_idx on public.lesson_logs(user_id);
+create index if not exists lesson_logs_class_idx on public.lesson_logs(class_id, taught_at);
+create index if not exists lesson_logs_unit_idx on public.lesson_logs(unit_id);
+create index if not exists events_user_idx on public.events(user_id);
+create index if not exists events_kind_idx on public.events(kind, created_at);
+alter table public.classes enable row level security;
+alter table public.lesson_logs enable row level security;
+alter table public.events enable row level security;
+drop policy if exists "classes owner all" on public.classes;
+create policy "classes owner all" on public.classes for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+drop policy if exists "lesson logs owner all" on public.lesson_logs;
+create policy "lesson logs owner all" on public.lesson_logs for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+drop policy if exists "events owner insert" on public.events;
+create policy "events owner insert" on public.events for insert with check (user_id = (select auth.uid()));
+grant select, insert, update, delete on public.classes, public.lesson_logs to authenticated;
+grant insert on public.events to authenticated;
