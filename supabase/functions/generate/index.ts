@@ -138,6 +138,7 @@ function cleanForm(f: any) {
     listening: N(f.listening, 0, 6, 2),
     wants: S(f.wants, 400),
     ccp: A(f.ccp, 10, 80),
+    memory: L(f.memory, 1800),
     framework: S(f.state, 40) === "Victoria" ? "VC2" : "AC9",
     docs: (Array.isArray(f.docs) ? f.docs : []).slice(0, 4).map((d: any) => ({ name: S(d?.name, 120), purpose: S(d?.purpose, 120), text: L(d?.text, 2500) })).filter((d: any) => d.text),
   };
@@ -156,6 +157,7 @@ function classBrief(f: Form, codeRows: { code: string; description: string }[]) 
     f.songs ? `Songs or repertoire the teacher wants to use: ${f.songs}.` : "",
     f.avoid ? `Avoid: ${f.avoid}.` : "",
     f.notes ? `Other notes from the teacher: ${f.notes}.` : "",
+    f.memory ? `CLASS MEMORY. This is what this exact class has already been taught and how it went. Build on it: do not re-teach what went well, revisit what was hard, and reuse songs and rhythms they already know as warm-ups.\n${f.memory}` : "",
     f.wants ? `Resources the teacher specifically asked for: ${f.wants}.` : "",
     f.ccp.length ? `Weave in these cross-curriculum priorities or capabilities where they genuinely fit (name them in the plan): ${f.ccp.join("; ")}.` : "",
   ];
@@ -356,7 +358,7 @@ ${f.amounts === "auto" ? `"plan" is how many on-screen resources this unit needs
 }
 
 function cleanLesson(d: any, f: Form) {
-  let phases = (Array.isArray(d?.phases) ? d.phases : []).slice(0, 9).map((p: any) => ({ name: S(p?.name, 50), minutes: N(p?.minutes, 1, 90, 5), teacher: L(p?.teacher, 900), students: L(p?.students, 600) })).filter((p: any) => p.name && (p.teacher || p.students));
+  let phases = (Array.isArray(d?.phases) ? d.phases : []).slice(0, 9).map((p: any) => ({ name: S(p?.name, 50), minutes: N(p?.minutes, 1, 90, 5), teacher: L(p?.teacher, 900), students: L(p?.students, 600), screen: S(p?.screen, 140), say: S(p?.say, 500), media: S(p?.media, 120) })).filter((p: any) => p.name && (p.teacher || p.students));
   if (phases.length < 2) throw new Error("The lesson came back incomplete. Try again.");
   let total = phases.reduce((s: number, p: any) => s + p.minutes, 0);
   if (total !== f.length) { // rescale, then put the remainder on the longest phase
@@ -367,6 +369,7 @@ function cleanLesson(d: any, f: Form) {
   }
   return {
     phases,
+    prep: A(d?.prep, 5, 260),
     materials: A(d?.materials, 10, 120).filter((x) => !PRINT_WORDS.test(x)),
     support: S(d?.support, 500), extend: S(d?.extend, 500),
     notes: S(d?.notes, 600),
@@ -400,14 +403,21 @@ For recordings, refer only to the listening pieces named above, or say "a record
 
 Use these phases in order: ${m.phases.join(", ")}. Minutes must add up to exactly ${f.length}.
 JSON shape:
-{"phases": [{"name": string, "minutes": integer, "teacher": string (what the teacher does and says, 2-4 specific sentences), "students": string (what students do, 1-3 sentences)}],
+{"phases": [{"name": string, "minutes": integer, "teacher": string (what the teacher does and says, 2-4 specific sentences), "students": string (what students do, 1-3 sentences),
+   "screen": string (ONE short instruction shown to students on the classroom screen during this phase, written to them, 12 words or fewer, e.g. "Clap the rhythm with me. Keep your feet on the beat."),
+   "say": string (the exact words the teacher can read aloud to start this phase, 1-3 plain sentences a non-musician could say),
+   "media": string (the exact title of the ONE on-screen media item used in this phase, copied from the list above, or "" if none)}],
+ "prep": [3-5 short points for a teacher with NO music training to read two minutes before class: what the musical words in this lesson mean in plain language, exactly how to do anything musical they must model (e.g. how to count in "1, 2, 3, 4" at a steady walking pace), and what "good" looks and sounds like],
  "materials": [short strings: ONLY everyday things the teacher supplies (instruments, whiteboard, speakers, device, space). Never printed resources or media],
  "support": string (how to support students who need it),
  "extend": string (how to extend confident students),
  "notes": string (one or two practical tips: behaviour, transitions, common mistakes),
  "search": [{"label": string, "query": string}] (0-2 optional YouTube search phrases for a listening example; never a URL)}`;
-  const r = await callModel(SYSTEM, user, 2200);
-  return { ...r, data: cleanLesson(r.data, f) };
+  const r = await callModel(SYSTEM, user, 3200);
+  const data = cleanLesson(r.data, f);
+  const titles = media.map((x) => (x.match(/"(.+)"/) || [])[1] || x);
+  data.phases.forEach((p: any) => { const hit = titles.find((t) => t.toLowerCase() === p.media.toLowerCase()) || titles.find((t) => p.media && (t.toLowerCase().includes(p.media.toLowerCase()) || p.media.toLowerCase().includes(t.toLowerCase()))); p.media = hit || ""; });
+  return { ...r, data };
 }
 
 function mediaShape(f: Form) {
@@ -595,12 +605,33 @@ JSON shape: {"printables": [one object per item above, same order]}`;
   return { ...r, data: { printables: out } };
 }
 
+/* ---------- report comments from what was taught ---------- */
+async function taskReport(f: Form, ctx: any) {
+  const lessons = (Array.isArray(ctx?.outline) ? ctx.outline : []).slice(0, 12).map((l: any, i: number) => `${i + 1}. ${S(l?.title, 90)}: ${S(l?.li, 200)} Success criteria: ${A(l?.sc, 4, 200).join("; ")}`).join("\n");
+  const user = `Year level: ${f.year}. State: ${f.state}, Australia.
+Unit: ${S(ctx?.unitTitle, 90)}
+Lessons and success criteria:
+${lessons}
+${ctx?.log ? "What actually happened when it was taught:\n" + L(ctx.log, 1500) : "The unit has not been logged as taught yet; write from the plan."}
+${ctx?.codes ? "Curriculum codes covered: " + S(ctx.codes, 300) : ""}
+
+Write a bank of school report comments for Music for this unit. Use the placeholder {name} for the student's name and "they/their" pronouns. Each comment is 2-3 sentences, specific to what was taught (name the actual skills), positive and honest, in the plain professional style Australian parents read in reports. No jargon without a plain explanation. Never invent events.
+JSON shape: {"levels": [{"level": "Working towards the standard", "comments": [two different comments]}, {"level": "At the standard", "comments": [two]}, {"level": "Above the standard", "comments": [two]}], "next": string (one sentence a teacher can add about what the class will learn next)}`;
+  const r = await callModel(SYSTEM, user, 1400, 0.5);
+  const levels = (Array.isArray(r.data?.levels) ? r.data.levels : []).slice(0, 3).map((x: any) => ({ level: S(x?.level, 60), comments: A(x?.comments, 3, 600).filter((c) => c.length > 20) })).filter((x: any) => x.level && x.comments.length);
+  if (levels.length < 3) throw new Error("The report comments came back incomplete. Try again.");
+  return { ...r, data: { levels, next: S(r.data?.next, 300) } };
+}
+
 /* ---------- help questions about Lessonbeat ---------- */
 const HELP = `You answer questions about Lessonbeat, a free pilot website made by an Australian music teacher. Facts:
 - Teachers fill in a planning form (year level Foundation to Year 12, state, curriculum codes, topic, lesson structure, who reads the plan, resources, school documents) and Lessonbeat writes a unit: overview, lesson plans, assessment with rubrics, and the resources those lessons use.
 - Resources: clap-alongs (rhythm notation with sound), sing-alongs (original songs in a key that suits the class), backing tracks (any key, several styles, four bass-line levels), listening pieces with search links, printable worksheets, listening grids, cards, word banks, posters and rhythm cards.
 - Curriculum: Australian Curriculum v9.0 Music codes for every state; Victorian teachers see Victorian Curriculum 2.0 (VC2) codes. Years 11-12 teachers type or paste their study design outcomes. Cross-curriculum priorities can be ticked.
 - Teachers can click any sentence to edit it, ask for a change in plain words, print or save as PDF, download for Word, share a view-only link, and save media as video.
+- Teach mode: press "Teach this lesson" and Lessonbeat runs the lesson on the classroom screen step by step, with a timer, words to say, and the music ready to play. It is designed so a teacher with no music training can run it.
+- Class memory: after teaching, a 20-second check-in records how it went. Lessonbeat remembers what each class has done and builds the next unit on it. Report comments can be written from what was actually taught.
+- Calendar packs: ready-to-run lessons for ANZAC Day, NAIDOC Week, Harmony Week, concerts and assemblies.
 - Guest use works without an account; a free account keeps units across devices. Uploaded documents are private to the teacher. Don't upload student names.
 - It uses AI, so teachers should check plans against school requirements.
 Answer in 1-4 short sentences, plain Australian English. If the question is not about Lessonbeat or teaching with it, say you can only help with questions about Lessonbeat. If you don't know, say so and suggest the "Tell us what you think" link. Return JSON {"answer": string}.`;
@@ -736,6 +767,7 @@ Deno.serve(async (req) => {
     else if (task === "worksheets") out = await taskWorksheets(f, codeRows, ctx);
     else if (task === "printables") out = await taskPrintables(f, ctx);
     else if (task === "help") out = await taskHelp(body);
+    else if (task === "report") out = await taskReport(f, ctx);
     else if (task === "revise") out = await taskRevise(f, codeRows, ctx);
     else return fail("TASK", "Unknown task.");
   } catch (e) {
